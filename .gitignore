@@ -1,0 +1,14 @@
+configure
+Makefile
+config.log
+config.status
+autom4te.cache
+mod_kafka.h
+tests.log
+.libs
+.*.sw*
+*.la
+*.lo
+*Tests*.log
+*.o
+*~
