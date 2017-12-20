@@ -64,7 +64,8 @@ static void kafka_log_cb(const rd_kafka_t *rk, int level, const char *facility,
 }
 #endif
 
-#if defined(HAVE_RD_KAFKA_CONF_SET_DR_CB)
+#if defined(HAVE_RD_KAFKA_CONF_SET_DR_CB) && \
+   !defined(HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB)
 static void kafka_dr_cb(rd_kafka_t *rk, void *msg, size_t msg_len,
     rd_kafka_resp_err_t msg_err, void *user_data, void *msg_data) {
   if (msg_err > 0) {
