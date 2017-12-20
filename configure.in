@@ -66,6 +66,115 @@ AC_ARG_WITH(libraries,
 AC_HEADER_STDC
 AC_CHECK_HEADERS(stdlib.h unistd.h limits.h fcntl.h)
 
+dnl Splice out -lsupp, since that library hasn't been built yet
+saved_libs="$LIBS"
+LIBS=`echo "$LIBS" | sed -e 's/-lsupp//g'`;
+LIBS="$LIBS -lrdkafka"
+
+AC_MSG_CHECKING([for librdkafka rd_kafka_conf_get])
+AC_TRY_LINK(
+  [
+    #include <librdkafka/rdkafka.h>
+  ],
+  [
+    (void) rd_kafka_conf_get(NULL, NULL, NULL, NULL);
+  ],
+  [
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(HAVE_RD_KAFKA_CONF_GET, 1, [Define if you have librdkafka rd_kafka_conf_get])
+  ],
+  [
+    AC_MSG_RESULT(no)
+  ]
+)
+
+AC_MSG_CHECKING([for librdkafka rd_kafka_conf_set_dr_cb])
+AC_TRY_LINK(
+  [
+    #include <librdkafka/rdkafka.h>
+  ],
+  [
+    rd_kafka_conf_set_dr_cb(NULL, NULL);
+  ],
+  [
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(HAVE_RD_KAFKA_CONF_SET_DR_CB, 1, [Define if you have librdkafka rd_kafka_conf_set_dr_cb])
+  ],
+  [
+    AC_MSG_RESULT(no)
+  ]
+)
+
+AC_MSG_CHECKING([for librdkafka rd_kafka_conf_set_dr_msg_cb])
+AC_TRY_LINK(
+  [
+    #include <librdkafka/rdkafka.h>
+  ],
+  [
+    rd_kafka_conf_set_dr_msg_cb(NULL, NULL);
+  ],
+  [
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB, 1, [Define if you have librdkafka rd_kafka_conf_set_dr_msg_cb])
+  ],
+  [
+    AC_MSG_RESULT(no)
+  ]
+)
+
+AC_MSG_CHECKING([for librdkafka rd_kafka_conf_set_log_cb])
+AC_TRY_LINK(
+  [
+    #include <librdkafka/rdkafka.h>
+  ],
+  [
+    rd_kafka_conf_set_log_cb(NULL, NULL);
+  ],
+  [
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(HAVE_RD_KAFKA_CONF_SET_LOG_CB, 1, [Define if you have librdkafka rd_kafka_conf_set_log_cb])
+  ],
+  [
+    AC_MSG_RESULT(no)
+  ]
+)
+
+AC_MSG_CHECKING([for librdkafka rd_kafka_flush])
+AC_TRY_LINK(
+  [
+    #include <librdkafka/rdkafka.h>
+  ],
+  [
+    (void) rd_kafka_flush(NULL, 0);
+  ],
+  [
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(HAVE_RD_KAFKA_FLUSH, 1, [Define if you have librdkafka rd_kafka_flush])
+  ],
+  [
+    AC_MSG_RESULT(no)
+  ]
+)
+
+AC_MSG_CHECKING([for librdkafka rd_kafka_last_error])
+AC_TRY_LINK(
+  [
+    #include <librdkafka/rdkafka.h>
+  ],
+  [
+    (void) rd_kafka_last_error();
+  ],
+  [
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(HAVE_RD_KAFKA_LAST_ERROR, 1, [Define if you have librdkafka rd_kafka_last_error])
+  ],
+  [
+    AC_MSG_RESULT(no)
+  ]
+)
+
+LIBS="$saved_libs"
+
 INCLUDES="$ac_build_addl_includes"
 LIBDIRS="$ac_build_addl_libdirs"
 

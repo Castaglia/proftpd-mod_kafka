@@ -41,6 +41,24 @@
 # error "ProFTPD 1.3.7rc1 or later required"
 #endif
 
+/* Define if you have the rd_kafka_conf_get function.  */
+#undef HAVE_RD_KAFKA_CONF_GET
+
+/* Define if you have the rd_kafka_conf_set_dr_cb function.  */
+#undef HAVE_RD_KAFKA_CONF_SET_DR_CB
+
+/* Define if you have the rd_kafka_conf_set_dr_msg_cb function.  */
+#undef HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB
+
+/* Define if you have the rd_kafka_conf_set_log_cb function.  */
+#undef HAVE_RD_KAFKA_CONF_SET_LOG_CB
+
+/* Define if you have the rd_kafka_flush function.  */
+#undef HAVE_RD_KAFKA_FLUSH
+
+/* Define if you have the rd_kafka_last_error function.  */
+#undef HAVE_RD_KAFKA_LAST_ERROR
+
 /* Miscellaneous */
 extern int kafka_logfd;
 extern module kafka_module;

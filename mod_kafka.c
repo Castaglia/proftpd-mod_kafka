@@ -57,11 +57,28 @@ static int kafka_sess_init(void);
 
 /* Callbacks */
 
+#if defined(HAVE_RD_KAFKA_CONF_SET_LOG_CB)
 static void kafka_log_cb(const rd_kafka_t *rk, int level, const char *facility,
     const char *text) {
   pr_trace_msg(trace_channel, 1, "(kafka): [%s:%d] %s", facility, level, text);
 }
+#endif
 
+#if defined(HAVE_RD_KAFKA_CONF_SET_DR_CB)
+static void kafka_dr_cb(rd_kafka_t *rk, void *msg, size_t msg_len,
+    rd_kafka_resp_err_t msg_err, void *user_data, void *msg_data) {
+  if (msg_err > 0) {
+    (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
+      "error delivering message: %s", rd_kafka_err2str(msg_err));
+
+  } else {
+    pr_trace_msg(trace_channel, 17,
+      "message delivered (%lu bytes)", (unsigned long) msg_len);
+  }
+}
+#endif
+
+#if defined(HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB)
 static void kafka_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *msg,
     void *event_data) {
   if (msg->err > 0) {
@@ -74,10 +91,11 @@ static void kafka_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *msg,
       msg->partition);
   }
 }
+#endif
 
 static int kafka_send_msg(pool *p, rd_kafka_topic_t *topic, char *payload,
     size_t payload_len) {
-  int res, flags;
+  int res, flags, xerrno;
 
   flags = RD_KAFKA_MSG_F_COPY;
 
@@ -89,11 +107,20 @@ static int kafka_send_msg(pool *p, rd_kafka_topic_t *topic, char *payload,
    */
   res = rd_kafka_produce(topic, RD_KAFKA_PARTITION_UA, flags, payload,
     payload_len, NULL, 0, NULL);
+  xerrno = errno;
+
   if (res < 0) {
+    const char *errstr;
+ 
+#if defined(HAVE_RD_KAFKA_LAST_ERROR)
+    errstr = rd_kafka_err2str(rd_kafka_last_error());
+#else
+    errstr = rd_kafka_err2str(rd_kafka_errno2err(xerrno));
+#endif
+
     (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
       "error producing message to topic '%s': %s",
-      rd_kafka_topic_name(topic),
-      rd_kafka_err2str(rd_kafka_last_error()));
+      rd_kafka_topic_name(topic), errstr);
   }
 
   /* Always poll afterward, to see if our queue can be flushed. */
@@ -355,6 +382,7 @@ MODRET kafka_log_any(cmd_rec *cmd) {
  */
 
 static void kafka_exit_ev(const void *event_data, void *user_data) {
+#if defined(HAVE_RD_KAFKA_FLUSH)
   rd_kafka_resp_err_t resp;
 
   pr_trace_msg(trace_channel, 17, "flushing pending messages");
@@ -364,6 +392,10 @@ static void kafka_exit_ev(const void *event_data, void *user_data) {
       "error flushing pending messages for %lu ms: %s",
       (unsigned long) KAFKA_FLUSH_TIMEOUT_MS, rd_kafka_err2str(resp));
   }
+#else
+  /* Always poll afterward, to see if our queue can be flushed. */
+  rd_kafka_poll(kafka, KAFKA_POLL_TIMEOUT_MS);
+#endif
 
   pr_table_do(kafka_topics, kafka_topic_destroy_cb, NULL, PR_TABLE_DO_FL_ALL);
   pr_table_empty(kafka_topics);
@@ -448,9 +480,11 @@ static int kafka_init(void) {
 
 static int kafka_sess_init(void) {
   config_rec *c;
-  int res;
+  int res, xerrno = 0;
   char *brokers, *topic, errstr[KAFKA_ERRSTR_SIZE];
+#if defined(HAVE_RD_KAFKA_CONF_GET)
   size_t builtin_len = 0;
+#endif
   rd_kafka_conf_t *kafka_conf;
   rd_kafka_conf_res_t conf_res;
 
@@ -528,14 +562,17 @@ static int kafka_sess_init(void) {
 
   kafka_conf = rd_kafka_conf_new();
 
+#if defined(HAVE_RD_KAFKA_CONF_GET)
   /* Query the builtin features; we reuse the error string buffer for this. */
   memset(errstr, '\0', sizeof(errstr));
   conf_res = rd_kafka_conf_get(kafka_conf, "builtin.features", errstr,
     &builtin_len);
-  if (conf_res == RD_KAFKA_CONF_OK) {
+  if (conf_res == RD_KAFKA_CONF_OK &&
+      builtin_len > 0) {
     pr_trace_msg(trace_channel, 12, "builtin features: %.*s",
       (int) builtin_len, errstr);
   }
+#endif
 
   memset(errstr, '\0', sizeof(errstr));
   conf_res = rd_kafka_conf_set(kafka_conf, "bootstrap.servers", brokers, errstr,
@@ -562,8 +599,14 @@ static int kafka_sess_init(void) {
     c = find_config_next(c, c->next, CONF_PARAM, "KafkaProperty", FALSE);
   }
 
+#if defined(HAVE_RD_KAFKA_CONF_SET_LOG_CB)
   rd_kafka_conf_set_log_cb(kafka_conf, kafka_log_cb);
+#endif
+#if defined(HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB)
   rd_kafka_conf_set_dr_msg_cb(kafka_conf, kafka_msg_cb);
+#elif defined(HAVE_RD_KAFKA_CONF_SET_DR_CB)
+  rd_kafka_conf_set_dr_cb(kafka_conf, kafka_dr_cb);
+#endif
 
   kafka = rd_kafka_new(RD_KAFKA_PRODUCER, kafka_conf, errstr, sizeof(errstr)-1);
   if (kafka == NULL) {
@@ -595,10 +638,20 @@ static int kafka_sess_init(void) {
       }
 
       topic = rd_kafka_topic_new(kafka, topic_name, NULL);
+      xerrno = errno;
+
       if (topic == NULL) {
+        const char *errstr;
+
+#if defined(HAVE_RD_KAFKA_LAST_ERROR)
+        errstr = rd_kafka_err2str(rd_kafka_last_error());
+#else
+        errstr = rd_kafka_err2str(rd_kafka_errno2err(xerrno));
+#endif
+
         (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
           "error allocating Kafka topic handle for topic '%s': %s", topic_name,
-          rd_kafka_err2str(rd_kafka_last_error()));
+          errstr);
 
       } else {
         res = pr_table_add(kafka_topics, topic_name, topic, sizeof(void *));
