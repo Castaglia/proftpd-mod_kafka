@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>ProFTPD module mod_kafka</title>
+</head>
+
+<body bgcolor=white>
+
+<hr>
+<center>
+<h2><b>ProFTPD module <code>mod_kafka</code></b></h2>
+</center>
+<hr><br>
+
+<p>
+The <code>mod_kafka</code> module enables ProFTPD support for sending log
+messages, as JSON, to Kafka brokers using the
+<a href="https://github.com/edenhill/librdkafka">librdkafka</a> client library.
+
+<p>
+This module is contained in the <code>mod_kafka</code> files for
+ProFTPD 1.3.<i>x</i>, and is not compiled by default.  Installation
+instructions are discussed <a href="#Installation">here</a>.  More examples
+of <code>mod_kafka</code> usage can be found <a href="#Usage">here</a>.
+
+<p>
+The most current version of <code>mod_kafka</code> can be found at:
+<pre>
+  <a href="https://github.com/Castaglia/proftpd-mod_kafka">https://github.com/Castaglia/proftpd-mod_kafka</a>
+</pre>
+
+<h2>Author</h2>
+<p>
+Please contact TJ Saunders &lt;tj <i>at</i> castaglia.org&gt; with any
+questions, concerns, or suggestions regarding this module.
+
+<h2>Directives</h2>
+<ul>
+  <li><a href="#KafkaBroker">KafkaBroker</a>
+  <li><a href="#KafkaEngine">KafkaEngine</a>
+  <li><a href="#KafkaLog">KafkaLog</a>
+  <li><a href="#KafkaLogOnEvent">KafkaLogOnEvent</a>
+  <li><a href="#KafkaProperty">KafkaProperty</a>
+</ul>
+
+<p>
+<hr>
+<h3><a name="KafkaBroker">KafkaBroker</a></h3>
+<strong>Syntax:</strong> Kafka <em>host[:port] ...</em><br>
+<strong>Default:</strong> None<br>
+<strong>Context:</strong> server config, <code>&lt;VirtualHost&gt;</code>, <code>&lt;Global&gt;</code><br>
+<strong>Module:</strong> mod_kafka<br>
+<strong>Compatibility:</strong> 1.3.6rc5 and later
+
+<p>
+The <code>KafkaServer</code> directive is used to configure the addresses/ports
+of the initial Kafka brokers contacted by <code>mod_kafka</code>.  For example:
+<pre>
+  KafkaBroker 1.2.3.4 5.6.7.8:19092
+</pre>
+or, for an IPv6 address, make sure the IPv6 address is enclosed in square
+brackets:
+<pre>
+  KafkaBroker [::ffff:1.2.3.4]:9092
+  KafkaProperty broker.address.family any
+</pre>
+
+<p>
+<hr>
+<h3><a name="KafkaEngine">KafkaEngine</a></h3>
+<strong>Syntax:</strong> KafkaEngine <em>on|off</em><br>
+<strong>Default:</strong> KafkaEngine off<br>
+<strong>Context:</strong> server config, <code>&lt;VirtualHost&gt;</code>, <code>&lt;Global&gt;</code><br>
+<strong>Module:</strong> mod_kafka<br>
+<strong>Compatibility:</strong> 1.3.6rc5 and later
+
+<p>
+The <code>KafkaEngine</code> directive enables or disables the
+<code>mod_kafka</code> module, and thus the configuration of Kafka support for
+the <code>proftpd</code> daemon.
+
+<p>
+<hr>
+<h3><a name="KafkaLog">KafkaLog</a></h3>
+<strong>Syntax:</strong> KafkaLog <em>path|"none"</em><br>
+<strong>Default:</strong> None<br>
+<strong>Context:</strong> server config, <code>&lt;VirtualHost&gt;</code>, <code>&lt;Global&gt;</code><br>
+<strong>Module:</strong> mod_kafka<br>
+<strong>Compatibility:</strong> 1.3.6rc5 and later
+
+<p>
+The <code>KafkaLog</code> directive is used to specify a log file for
+<code>mod_kafka</code>'s reporting on a per-server basis.  The
+<em>file</em> parameter given must be the full path to the file to use for
+logging.
+
+<p>
+Note that this path must <b>not</b> be to a world-writable directory and,
+unless <code>AllowLogSymlinks</code> is explicitly set to <em>on</em>
+(generally a bad idea), the path must <b>not</b> be a symbolic link.
+
+<p>
+<hr>
+<h3><a name="KafkaLogOnEvent">KafkaLogOnEvent</a></h3>
+<strong>Syntax:</strong> KafkaLogOnEvent <em>"none"|events format-name [topic ...]</em><br>
+<strong>Default:</strong> None<br>
+<strong>Context:</strong> server config, <code>&lt;VirtualHost&gt;</code>, <code>&lt;Global&gt;</code>, <code>&lt;Anonymous&gt;</code>, <code>&lt;Directory&gt;</code><br>
+<strong>Module:</strong> mod_kafka<br>
+<strong>Compatibility:</strong> 1.3.7rc1 and later
+
+<p>
+The <code>KafkaLogOnEvent</code> directive configures the use of Kafka for
+<em>logging</em>.  Whenever one of the comma-separated list of <em>events</em>
+occurs, <code>mod_kafka</code> will compose a JSON object, using the
+<a href="http://www.proftpd.org/docs/modules/mod_log.html#LogFormat"><code>LogFormat</code></a> named by
+<em>format-name</em> as a <i>template</i> for the fields to include in the
+JSON object.  The JSON object of that event will then be published to a
+Kafka <em>topic</em>.  Multiple <code>KafkaLogOnEvent</code> directives can be
+used, for different log formats for different events and different topics.
+
+<p>
+The optional <em>topic</em> parameter, if present, specifies the value to use
+as the topic name.  If the topic name is not provided explicitly, the configured
+<em>format-name</em> is used as the topic name.
+
+<p>
+More on the use of Kafka logging, including a table showing how
+<code>LogFormat</code> variables are mapped to JSON object keys can be found
+<a href="#Logging">here</a>.
+
+<p>
+Example:
+<pre>
+  LogFormat sessions "%{iso8601} %a"
+  KafkaLogOnEvent CONNECT,DISCONNECT sessions
+</pre>
+
+<p>
+In addition to specific FTP commands, the <em>events</em> list can specify
+"ALL", for logging on <b>all</b> commands.  Or it can <i>include</i> the
+"CONNECT" and "DISCONNECT" <i>events</i>, which can be useful for logging the
+start and end times of a session.  <b>Note</b> that
+<code>KafkaLogOnEvent</code> <i>does</i> support the logging <i>classes</i>
+that the <code>ExtendedLog</code> directive supports.
+
+<p>
+<hr>
+<h3><a name="KafkaProperty">KafkaProperty</a></h3>
+<strong>Syntax:</strong> KafkaProperty <em>name value</em><br>
+<strong>Default:</strong> None<br>
+<strong>Context:</strong> server config, <code>&lt;VirtualHost&gt;</code>, <code>&lt;Global&gt;</code><br>
+<strong>Module:</strong> mod_kafka<br>
+<strong>Compatibility:</strong> 1.3.7rc1 and later
+
+<p>
+The <code>KafkaProperty</code> directive is used to configure the property
+<em>name</em> and <em>value</em> of the common Kafka properties; se>
+<a href="https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md">here</a>.
+
+<p>
+Example:
+<pre>
+  KafkaProperty socket.timeout.ms 30000
+  KafkaProperty socket.keepalive.enable true
+  KafkaProperty socket.nagle.disable true
+</pre>
+
+<p>
+<hr>
+<h2><a name="Installation">Installation</a></h2>
+To install <code>mod_kafka</code>, copy the <code>mod_kafka</code> files into:
+<pre>
+  <i>proftpd-dir</i>/contrib/
+</pre>
+after unpacking the latest proftpd-1.3.<i>x</i> source code.  For including
+<code>mod_kafka</code> as a staticly linked module:
+<pre>
+  $ ./configure --with-modules=mod_kafka
+</pre>
+To build <code>mod_kafka</code> as a DSO module:
+<pre>
+  $ ./configure --enable-dso --with-shared=mod_kafka
+</pre>
+Then follow the usual steps:
+<pre>
+  $ make
+  $ make install
+</pre>
+
+<p>
+You may also need to tell <code>configure</code> how to find the
+<code>librdkafka</code> header and library files:
+<pre>
+  $ ./configure --with-modules=mod_kafka \
+    --with-includes=<i>/path/to/librdkafka/include</i> \
+    --with-libraries=<i>/path/to/librdkafka/lib</i>
+</pre>
+
+<p>
+<hr>
+<h2><a name="Usage">Usage</a></h2>
+
+<p>
+This example shows the use of Kafka logging for <em>all</em> commands:
+<pre>
+  &lt;IfModule mod_kafka.c&gt;
+    KafkaEngine on
+    KafkaLog /var/log/ftpd/kafka.log
+    KafkaBroker 127.0.0.1:9092
+
+    LogFormat kafka "%h %l %u %t \"%r\" %s %b"
+    KafkaLogOnEvent ALL kafka
+  &lt;/IfModule&gt;
+</pre>
+
+<p><a name="Logging"></a>
+<b>Kafka Logging</b><br>
+When using Kafka logging, the following table shows how <code>mod_kafka</code>
+converts a <code>LogFormat</code> variable into the key names in the JSON
+logging objects:
+<table border=1 summary="Kafka LogFormat Variables">
+  <tr>
+    <td><b><code>LogFormat</code> Variable</b></td>
+    <td><b>Key</b></td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%A</code>&nbsp;</td>
+    <td>anon_password</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%a</code>&nbsp;</td>
+    <td>remote_ip</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%b</code>&nbsp;</td>
+    <td>bytes_sent</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%c</code>&nbsp;</td>
+    <td>connection_class</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%D</code>&nbsp;</td>
+    <td>dir_path</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%d</code>&nbsp;</td>
+    <td>dir_name</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%E</code>&nbsp;</td>
+    <td>session_end_reason</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{epoch}</code>&nbsp;</td>
+    <td>Unix timestamp, in seconds since Jan 1 1970.</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{<em>name</em>}e</code>&nbsp;</td>
+    <td>ENV:<em>name</em></td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%F</code>&nbsp;</td>
+    <td>transfer_path</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%f</code>&nbsp;</td>
+    <td>file</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{file-modified}</code>&nbsp;</td>
+    <td>file_modified</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%g</code>&nbsp;</td>
+    <td>group</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{gid}</code>&nbsp;</td>
+    <td>gid</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%H</code>&nbsp;</td>
+    <td>server_ip</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%h</code>&nbsp;</td>
+    <td>remote_dns</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%I</code>&nbsp;</td>
+    <td>session_bytes_rcvd</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{iso8601}</code>&nbsp;</td>
+    <td>timestamp</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%J</code>&nbsp;</td>
+    <td>command_params</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%L</code>&nbsp;</td>
+    <td>local_ip</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%l</code>&nbsp;</td>
+    <td>identd_user</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%m</code>&nbsp;</td>
+    <td>command</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{microsecs}</code>&nbsp;</td>
+    <td>microsecs</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{millisecs}</code>&nbsp;</td>
+    <td>millisecs</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{note:<em>name</em>}</code>&nbsp;</td>
+    <td>NOTE:<em>name</em></td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%O</code>&nbsp;</td>
+    <td>session_bytes_sent</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%P</code>&nbsp;</td>
+    <td>pid</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%p</code>&nbsp;</td>
+    <td>local_port</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{protocol}</code>&nbsp;</td>
+    <td>protocol</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%r</code>&nbsp;</td>
+    <td>raw_command</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%S</code>&nbsp;</td>
+    <td>response_msg</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%s</code>&nbsp;</td>
+    <td>response_code</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%T</code>&nbsp;</td>
+    <td>transfer_secs</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%t</code>&nbsp;</td>
+    <td>local_time</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{transfer-failure}</code>&nbsp;</td>
+    <td>transfer_failure</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{transfer-status}</code>&nbsp;</td>
+    <td>transfer_status</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%U</code>&nbsp;</td>
+    <td>original_user</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%u</code>&nbsp;</td>
+    <td>user</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{uid}</code>&nbsp;</td>
+    <td>uid</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%V</code>&nbsp;</td>
+    <td>server_dns</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%v</code>&nbsp;</td>
+    <td>server_name</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%{version}</code>&nbsp;</td>
+    <td>server_version</td>
+  </tr>
+
+  <tr>
+    <td>&nbsp;<code>%w</code>&nbsp;</td>
+    <td>rename_from</td>
+  </tr>
+</table>
+
+<p>
+In addition to the standard <code>LogFormat</code> variables, the
+<code>mod_kafka</code> module also adds a "connecting" key for events
+generated when a client first connects, and a "disconnecting" key for events
+generated when a client disconnects.  These keys can be used for determining
+the start/finish events for a given session.
+
+<p>
+Here is an example of the JSON-formatted records generated, using the above
+example configuration:
+<pre>
+  {"connecting":true,"timestamp":"2013-08-21 23:08:22,171"}
+  {"command":"USER","timestamp":"2013-08-21 23:08:22,278"}
+  {"user":"proftpd","command":"PASS","timestamp":"2013-08-21 23:08:22,305"}
+  {"user":"proftpd","command":"PASV","timestamp":"2013-08-21 23:08:22,317"}
+  {"user":"proftpd","command":"LIST","bytes_sent":432,"transfer_secs":4.211,"timestamp":"2013-08-21 23:08:22,329"}
+  {"user":"proftpd","command":"QUIT","timestamp":"2013-08-21 23:08:22,336"}
+  {"disconnecting":true,"user":"proftpd","timestamp":"2013-08-21 23:08:22,348"}
+</pre>
+Notice that for a given event, not <i>all</i> of the <code>LogFormat</code>
+variables are filled in.  If <code>mod_kafka</code> determines that a given
+<code>LogFormat</code> variable has no value for the logged event, it will
+simply omit that variable from the JSON object.
+
+<p>
+Another thing to notice is that the generated JSON object ignores the textual
+delimiters configured by the <code>LogFormat</code> directive; all that
+matters are the <code>LogFormat</code> variables which appear in the directive.
+
+<p>
+<hr>
+<font size=2><b><i>
+&copy; Copyright 2017 TJ Saunders<br>
+ All Rights Reserved<br>
+</i></b></font>
+<hr>
+
+</body>
+</html>
