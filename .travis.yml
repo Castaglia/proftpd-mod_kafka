@@ -8,10 +8,12 @@ install:
   - sudo apt-get update -qq
   # for unit tests
   - sudo apt-get install -y check
+  - sudo apt-get install -y libsubunit-dev
   # for Kafka support
   - sudo apt-get install -y librdkafka-dev
   # for static code analysis
-  - sudo apt-get install -y cppcheck rats
+  # - sudo apt-get install -y cppcheck
+  # - sudo apt-get install -y rats
   # for test code coverage
   - sudo apt-get install -y lcov
   - gem install coveralls-lcov
@@ -32,10 +34,10 @@ script:
   - cp install-sh proftpd/contrib/mod_kafka/
   - cp -R t/ proftpd/contrib/mod_kafka/t/
   - cd proftpd
-  - ./configure LIBS='-lm -lrt -pthread' --enable-devel=coverage --enable-dso --enable-tests --with-shared=mod_kafka
+  - ./configure LIBS='-lm -lsubunit -lrt -pthread' --enable-devel=coverage --enable-dso --enable-tests --with-shared=mod_kafka
   - make
   - make clean
-  - ./configure LIBS='-lm -lrt -pthread' --enable-devel=coverage --enable-tests --with-modules=mod_kafka
+  - ./configure LIBS='-lm -lsubunit -lrt -pthread' --enable-devel=coverage --enable-tests --with-modules=mod_kafka
   - make
   # - cd contrib/mod_kafka && make TEST_VERBOSE=1 check && cd ../../
   # Run `tidy -e -q mod_kafka.html` for doc validation

@@ -1,6 +1,6 @@
 /*
  * ProFTPD - mod_kafka API testsuite
- * Copyright (c) 2017 TJ Saunders <tj@castaglia.org>
+ * Copyright (c) 2017-2020 TJ Saunders <tj@castaglia.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ int tests_stubs_set_next_cmd(cmd_rec *cmd);
 
 Suite *tests_get_kafka_suite(void);
 
-unsigned int recvd_signal_flags;
+extern volatile unsigned int recvd_signal_flags;
 extern pid_t mpid;
 extern server_rec *main_server;
 
