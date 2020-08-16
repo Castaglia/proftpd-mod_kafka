@@ -1,6 +1,6 @@
 /*
  * ProFTPD - mod_kafka
- * Copyright (c) 2017 TJ Saunders
+ * Copyright (c) 2017-2020 TJ Saunders
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,7 +60,8 @@ static int kafka_sess_init(void);
 #if defined(HAVE_RD_KAFKA_CONF_SET_LOG_CB)
 static void kafka_log_cb(const rd_kafka_t *rk, int level, const char *facility,
     const char *text) {
-  pr_trace_msg(trace_channel, 1, "(kafka): [%s:%d] %s", facility, level, text);
+  pr_trace_msg(trace_channel, 1, "(rdkafka): [%s:%d] %s", facility, level,
+    text);
 }
 #endif
 
@@ -73,7 +74,7 @@ static void kafka_dr_cb(rd_kafka_t *rk, void *msg, size_t msg_len,
       "error delivering message: %s", rd_kafka_err2str(msg_err));
 
   } else {
-    pr_trace_msg(trace_channel, 17,
+    pr_trace_msg(trace_channel, 15,
       "message delivered (%lu bytes)", (unsigned long) msg_len);
   }
 }
@@ -87,7 +88,7 @@ static void kafka_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *msg,
       "error delivering message: %s", rd_kafka_err2str(msg->err));
 
   } else {
-    pr_trace_msg(trace_channel, 17,
+    pr_trace_msg(trace_channel, 15,
       "message delivered (%lu bytes, partition %d)", (unsigned long) msg->len,
       msg->partition);
   }
@@ -100,7 +101,7 @@ static int kafka_send_msg(pool *p, rd_kafka_topic_t *topic, char *payload,
 
   flags = RD_KAFKA_MSG_F_COPY;
 
-  pr_trace_msg(trace_channel, 17, "producing message (%lu bytes) to topic '%s'",
+  pr_trace_msg(trace_channel, 15, "producing message (%lu bytes) to topic '%s'",
     (unsigned long) payload_len, rd_kafka_topic_name(topic));
 
   /* TODO: Handle the RD_KAFKA_RESP_ERR_QUEUE_FULL situation by retrying
@@ -111,17 +112,17 @@ static int kafka_send_msg(pool *p, rd_kafka_topic_t *topic, char *payload,
   xerrno = errno;
 
   if (res < 0) {
-    const char *errstr;
+    const char *xerrstr;
  
 #if defined(HAVE_RD_KAFKA_LAST_ERROR)
-    errstr = rd_kafka_err2str(rd_kafka_last_error());
+    xerrstr = rd_kafka_err2str(rd_kafka_last_error());
 #else
-    errstr = rd_kafka_err2str(rd_kafka_errno2err(xerrno));
+    xerrstr = rd_kafka_err2str(rd_kafka_errno2err(xerrno));
 #endif
 
     (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
-      "error producing message to topic '%s': %s",
-      rd_kafka_topic_name(topic), errstr);
+      "error producing message to topic '%s': %s (%s)",
+      rd_kafka_topic_name(topic), xerrstr, strerror(xerrno));
   }
 
   /* Always poll afterward, to see if our queue can be flushed. */
@@ -316,7 +317,7 @@ MODRET set_kafkalogonevent(cmd_rec *cmd) {
   fmt_name = cmd->argv[2];
 
   for (i = 3; i < cmd->argc; i += 2) {
-    if (strcmp(cmd->argv[i], "topic") == 0) {
+    if (strcasecmp(cmd->argv[i], "topic") == 0) {
       topic = cmd->argv[i+1];
 
     } else {
@@ -465,14 +466,14 @@ static int kafka_init(void) {
 
   if (rd_kafka_version() != RD_KAFKA_VERSION) {
     pr_log_pri(PR_LOG_NOTICE, MOD_KAFKA_VERSION
-      ": compiled against '%d.%d.%d', but running using '%s'",
+      ": compiled against librdkafka '%d.%d.%d', but running using '%s'",
       (RD_KAFKA_VERSION >> 24) & 0xff,
       (RD_KAFKA_VERSION >> 16) & 0xff,
       (RD_KAFKA_VERSION >> 8) & 0xff,
       rd_kafka_version_str());
 
   } else {
-    pr_log_debug(DEBUG2, MOD_KAFKA_VERSION ": using %s",
+    pr_log_debug(DEBUG2, MOD_KAFKA_VERSION ": using librdkafka %s",
       rd_kafka_version_str());
   }
 
@@ -482,7 +483,7 @@ static int kafka_init(void) {
 static int kafka_sess_init(void) {
   config_rec *c;
   int res, xerrno = 0;
-  char *brokers, *topic, errstr[KAFKA_ERRSTR_SIZE];
+  char *brokers, errstr[KAFKA_ERRSTR_SIZE];
 #if defined(HAVE_RD_KAFKA_CONF_GET)
   size_t builtin_len = 0;
 #endif
@@ -514,8 +515,6 @@ static int kafka_sess_init(void) {
     logname = c->argv[0];
 
     if (strncasecmp(logname, "none", 5) != 0) {
-      int xerrno;
-
       pr_signals_block();
       PRIVS_ROOT
       res = pr_log_openfile(logname, &kafka_logfd, PR_LOG_SYSTEM_MODE);
@@ -556,24 +555,11 @@ static int kafka_sess_init(void) {
   }
 
   brokers = c->argv[0];
-  topic = c->argv[1];
 
   kafka_pool = make_sub_pool(session.pool);
   pr_pool_tag(kafka_pool, MOD_KAFKA_VERSION);
 
   kafka_conf = rd_kafka_conf_new();
-
-#if defined(HAVE_RD_KAFKA_CONF_GET)
-  /* Query the builtin features; we reuse the error string buffer for this. */
-  memset(errstr, '\0', sizeof(errstr));
-  conf_res = rd_kafka_conf_get(kafka_conf, "builtin.features", errstr,
-    &builtin_len);
-  if (conf_res == RD_KAFKA_CONF_OK &&
-      builtin_len > 0) {
-    pr_trace_msg(trace_channel, 12, "builtin features: %.*s",
-      (int) builtin_len, errstr);
-  }
-#endif
 
   memset(errstr, '\0', sizeof(errstr));
   conf_res = rd_kafka_conf_set(kafka_conf, "bootstrap.servers", brokers, errstr,
@@ -591,13 +577,30 @@ static int kafka_sess_init(void) {
     name = c->argv[0];
     value = c->argv[1];
 
+    memset(errstr, '\0', sizeof(errstr));
     conf_res = rd_kafka_conf_set(kafka_conf, name, value, errstr,
       sizeof(errstr)-1);
     if (conf_res != RD_KAFKA_CONF_OK) {
-      memset(errstr, '\0', sizeof(errstr));
+      (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
+        "error setting property '%s=%s': %s", name, value, errstr);
     }
 
     c = find_config_next(c, c->next, CONF_PARAM, "KafkaProperty", FALSE);
+  }
+
+  if (pr_trace_get_level(trace_channel) > 20) {
+    const char *name, *value;
+
+    name = "debug";
+    value = "broker,generic,msg,topic";
+
+    memset(errstr, '\0', sizeof(errstr));
+    conf_res = rd_kafka_conf_set(kafka_conf, name, value, errstr,
+      sizeof(errstr)-1);
+    if (conf_res != RD_KAFKA_CONF_OK) {
+      (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
+        "error setting property '%s=%s': %s", name, value, errstr);
+    }
   }
 
 #if defined(HAVE_RD_KAFKA_CONF_SET_LOG_CB)
@@ -642,17 +645,17 @@ static int kafka_sess_init(void) {
       xerrno = errno;
 
       if (topic == NULL) {
-        const char *errstr;
+        const char *xerrstr;
 
 #if defined(HAVE_RD_KAFKA_LAST_ERROR)
-        errstr = rd_kafka_err2str(rd_kafka_last_error());
+        xerrstr = rd_kafka_err2str(rd_kafka_last_error());
 #else
-        errstr = rd_kafka_err2str(rd_kafka_errno2err(xerrno));
+        xerrstr = rd_kafka_err2str(rd_kafka_errno2err(xerrno));
 #endif
 
         (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
           "error allocating Kafka topic handle for topic '%s': %s", topic_name,
-          errstr);
+          xerrstr);
 
       } else {
         res = pr_table_add(kafka_topics, topic_name, topic, sizeof(void *));
@@ -671,11 +674,21 @@ static int kafka_sess_init(void) {
 
       c = find_config_next(c, c->next, CONF_PARAM, "KafkaLogOnEvent", TRUE);
     }
-  }
 
-  if (kafka_engine == TRUE) {
     jot_logfmt2json = pr_jot_get_logfmt2json(kafka_pool);
   }
+
+#if defined(HAVE_RD_KAFKA_CONF_GET)
+  /* Query the builtin features; we reuse the error string buffer for this. */
+  memset(errstr, '\0', sizeof(errstr));
+  conf_res = rd_kafka_conf_get(kafka_conf, "builtin.features", errstr,
+    &builtin_len);
+  if (conf_res == RD_KAFKA_CONF_OK &&
+      builtin_len > 0) {
+    pr_trace_msg(trace_channel, 12, "builtin features: %.*s (%lu)",
+      (int) builtin_len, errstr, (unsigned long) builtin_len);
+  }
+#endif
 
   return 0;
 }
