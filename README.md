@@ -3,7 +3,7 @@ proftpd-mod_kafka
 
 Status
 ------
-[![Build Status](https://travis-ci.org/Castaglia/proftpd-mod_kafka.svg?branch=master)](https://travis-ci.org/Castaglia/proftpd-mod_kafka)
+[![GitHub Actions CI Status](https://github.com/Castaglia/proftpd-mod_kafka/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Castaglia/proftpd-mod_kafka/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-GPL-brightgreen.svg)](https://img.shields.io/badge/license-GPL-brightgreen.svg)
 
 
