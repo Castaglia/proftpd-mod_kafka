@@ -14,8 +14,35 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    services:
+      kafka:
+        # Docker Hub image
+        image: bitnami/kafka:3.0
+        env:
+          ALLOW_PLAINTEXT_LISTENER: 'yes'
+          KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: 'true'
+          KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+        # Set health checks to wait until Kafka has started
+        options: >-
+          --health-cmd "kafka-broker-api-versions.sh --version"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      zookeeper:
+        image: bitnami/zookeeper:3.8
+        env:
+          ALLOW_ANONYMOUS_LOGIN: 'yes'
+        # Set health checks to wait until Zookeeper has started
+        options: >-
+          --health-cmd "echo mntr | nc -w 2 -q 2 localhost 2181"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       CI: true
+      KAFKA_HOST: kafka
 
     strategy:
       matrix:
@@ -96,7 +123,28 @@ jobs:
           # for Kafka support
           apt-get install -y librdkafka-dev
 
+          # for zlib support
+          apt-get install -y zlib1g-dev
+
           # for integration/regression test
+          apt-get install -y \
+            libcompress-raw-zlib-perl \
+            libdata-dumper-simple-perl \
+            libdatetime-perl \
+            libfile-copy-recursive-perl \
+            libfile-path-tiny-perl \
+            libfile-spec-native-perl \
+            libjson-perl \
+            libnet-ssh2-perl \
+            libnet-ssleay-perl \
+            libnet-telnet-perl \
+            libposix-2008-perl \
+            libtest-unit-perl \
+            libtime-hr-perl \
+            libwww-perl
+          PERL_MM_USE_DEFAULT=1 perl -MCPAN -e "CPAN::Shell->notest('install', 'Gzip::Faster')"
+          PERL_MM_USE_DEFAULT=1 perl -MCPAN -e "CPAN::Shell->notest('install', 'Kafka')"
+
           # for test code coverage
           apt-get install -y lcov ruby
           gem install coveralls-lcov
@@ -141,6 +189,15 @@ jobs:
         run: |
           cd proftpd
           make install
+
+      - name: Run integration tests
+        if: ${{ matrix.compiler == 'gcc' && matrix.container == 'ubuntu:18.04' }}
+        env:
+          PROFTPD_TEST_BIN: /usr/local/sbin/proftpd
+          PROFTPD_TEST_DIR: ${{ github.workspace }}/proftpd
+        run: |
+          cd proftpd/contrib/mod_kafka
+          perl tests.pl
 
       - name: Build with shared modules
         env:

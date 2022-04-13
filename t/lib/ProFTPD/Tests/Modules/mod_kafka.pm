@@ -7,7 +7,6 @@ use strict;
 use File::Path qw(mkpath);
 use File::Spec;
 use IO::Handle;
-use IO::Socket::INET6;
 
 use ProFTPD::TestSuite::FTP;
 use ProFTPD::TestSuite::Utils qw(:auth :config :features :running :test :testsuite);
@@ -69,6 +68,16 @@ sub list_tests {
   return testsuite_get_runnable_tests($TESTS);
 }
 
+sub get_kafka_host {
+  my $kafka_host = 'localhost';
+
+  if (defined($ENV{KAFKA_HOST})) {
+    $kafka_host = $ENV{KAFKA_HOST};
+  }
+
+  return $kafka_host;
+}
+
 sub kafka_topic_getall {
   my $name = shift;
 
@@ -76,7 +85,8 @@ sub kafka_topic_getall {
   require Kafka::Connection;
   require Kafka::Consumer;
 
-  my $kafka = Kafka::Connection->new(host => '127.0.0.1');
+  my $kafka_host = get_kafka_host();
+  my $kafka = Kafka::Connection->new(host => $kafka_host);
   my $consumer = Kafka::Consumer->new(Connection => $kafka);
 
   my $msgs = $consumer->fetch($name, 0, 0, $Kafka::DEFAULT_MAX_BYTES);
@@ -111,6 +121,8 @@ sub kafka_log_on_event {
   my $topic = $fmt_name;
   kafka_topic_getall($topic);
 
+  my $kafka_host = get_kafka_host();
+
   my $config = {
     PidFile => $setup->{pid_file},
     ScoreboardFile => $setup->{scoreboard_file},
@@ -120,6 +132,7 @@ sub kafka_log_on_event {
 
     AuthUserFile => $setup->{auth_user_file},
     AuthGroupFile => $setup->{auth_group_file},
+    AuthOrder => 'mod_auth_file.c',
 
     IfModules => {
       'mod_delay.c' => {
@@ -129,7 +142,7 @@ sub kafka_log_on_event {
       # Note: we need to use arrays here, since order of directives matters.
       'mod_kafka.c' => [
         'KafkaEngine on',
-        "KafkaBroker 127.0.0.1",
+        "KafkaBroker $kafka_host",
         "KafkaLog $setup->{log_file}",
         "LogFormat $fmt_name \"%A %a %b %c %D %d %E %{epoch} %F %f %{gid} %g %H %h %I %{iso8601} %J %L %l %m %O %P %p %{protocol} %R %r %{remote-port} %S %s %T %t %U %u %{uid} %V %v %{version}\"",
         "KafkaLogOnEvent ALL $fmt_name",
@@ -155,6 +168,9 @@ sub kafka_log_on_event {
   defined(my $pid = fork()) or die("Can't fork: $!");
   if ($pid) {
     eval {
+      # Allow for server startup
+      sleep(1);
+
       my $client = ProFTPD::TestSuite::FTP->new('127.0.0.1', $port);
       $client->login($setup->{user}, $setup->{passwd});
 
@@ -193,6 +209,9 @@ sub kafka_log_on_event {
   $self->assert_child_ok($pid);
 
   eval {
+    # Allow for propagation time
+    sleep(2);
+
     my $data = kafka_topic_getall($topic);
 
     my $nrecords = scalar(@$data);
@@ -232,6 +251,8 @@ sub kafka_log_on_event_custom_topic {
 
   kafka_topic_getall($topic);
 
+  my $kafka_host = get_kafka_host();
+
   my $config = {
     PidFile => $setup->{pid_file},
     ScoreboardFile => $setup->{scoreboard_file},
@@ -241,6 +262,7 @@ sub kafka_log_on_event_custom_topic {
 
     AuthUserFile => $setup->{auth_user_file},
     AuthGroupFile => $setup->{auth_group_file},
+    AuthOrder => 'mod_auth_file.c',
 
     IfModules => {
       'mod_delay.c' => {
@@ -250,7 +272,7 @@ sub kafka_log_on_event_custom_topic {
       # Note: we need to use arrays here, since order of directives matters.
       'mod_kafka.c' => [
         'KafkaEngine on',
-        "KafkaBroker 127.0.0.1",
+        "KafkaBroker $kafka_host",
         "KafkaLog $setup->{log_file}",
         "LogFormat $fmt_name \"%A %a %b %c %D %d %E %{epoch} %F %f %{gid} %g %H %h %I %{iso8601} %J %L %l %m %O %P %p %{protocol} %R %r %{remote-port} %S %s %T %t %U %u %{uid} %V %v %{version}\"",
         "KafkaLogOnEvent ALL $fmt_name topic $topic",
@@ -314,6 +336,9 @@ sub kafka_log_on_event_custom_topic {
   $self->assert_child_ok($pid);
 
   eval {
+    # Allow for propagation time
+    sleep(2);
+
     my $data = kafka_topic_getall($topic);
 
     my $nrecords = scalar(@$data);
@@ -356,6 +381,8 @@ sub kafka_log_on_event_per_dir {
 
   kafka_topic_getall($topic);
 
+  my $kafka_host = get_kafka_host();
+
   my $config = {
     PidFile => $setup->{pid_file},
     ScoreboardFile => $setup->{scoreboard_file},
@@ -365,6 +392,7 @@ sub kafka_log_on_event_per_dir {
 
     AuthUserFile => $setup->{auth_user_file},
     AuthGroupFile => $setup->{auth_group_file},
+    AuthOrder => 'mod_auth_file.c',
 
     IfModules => {
       'mod_delay.c' => {
@@ -385,7 +413,7 @@ sub kafka_log_on_event_per_dir {
     print $fh <<EOC;
 <IfModule mod_kafka.c>
   KafkaEngine on
-  KafkaBroker 127.0.0.1
+  KafkaBroker $kafka_host
   KafkaLog $setup->{log_file}
   LogFormat $fmt_name "%a %u"
 
@@ -417,6 +445,9 @@ EOC
   defined(my $pid = fork()) or die("Can't fork: $!");
   if ($pid) {
     eval {
+      # Allow for server startup
+      sleep(1);
+
       my $client = ProFTPD::TestSuite::FTP->new('127.0.0.1', $port);
       $client->login($setup->{user}, $setup->{passwd});
       $client->pwd();
@@ -446,6 +477,9 @@ EOC
   $self->assert_child_ok($pid);
 
   eval {
+    # Allow for propagation time
+    sleep(2);
+
     my $data = kafka_topic_getall($topic);
 
     my $nrecords = scalar(@$data);
@@ -487,6 +521,8 @@ sub kafka_log_on_event_per_dir_none {
 
   kafka_topic_getall($topic);
 
+  my $kafka_host = get_kafka_host();
+
   my $config = {
     PidFile => $setup->{pid_file},
     ScoreboardFile => $setup->{scoreboard_file},
@@ -496,6 +532,7 @@ sub kafka_log_on_event_per_dir_none {
 
     AuthUserFile => $setup->{auth_user_file},
     AuthGroupFile => $setup->{auth_group_file},
+    AuthOrder => 'mod_auth_file.c',
 
     IfModules => {
       'mod_delay.c' => {
@@ -516,7 +553,7 @@ sub kafka_log_on_event_per_dir_none {
     print $fh <<EOC;
 <IfModule mod_kafka.c>
   KafkaEngine on
-  KafkaBroker 127.0.0.1
+  KafkaBroker $kafka_host
   KafkaLog $setup->{log_file}
   LogFormat $fmt_name "%a %u"
 
@@ -552,6 +589,9 @@ EOC
   defined(my $pid = fork()) or die("Can't fork: $!");
   if ($pid) {
     eval {
+      # Allow for server startup
+      sleep(1);
+
       my $client = ProFTPD::TestSuite::FTP->new('127.0.0.1', $port);
       $client->login($setup->{user}, $setup->{passwd});
       $client->pwd();
@@ -581,10 +621,18 @@ EOC
   $self->assert_child_ok($pid);
 
   eval {
+    # Allow for propagation time
+    sleep(2);
+
     my $data = kafka_topic_getall($topic);
 
+    if ($ENV{TEST_VERBOSE}) {
+      use Data::Dumper;
+      print STDERR "# ", Dumper($data), "\n";
+    }
+
     my $nrecords = scalar(@$data);
-    $self->assert($nrecords == 0, "Expected 0 records, got $nrecords");
+    $self->assert($nrecords == 1, "Expected 1 record, got $nrecords");
   };
   if ($@) {
     $ex = $@;
