@@ -741,4 +741,3 @@ module kafka_module = {
   /* Module version */
   MOD_KAFKA_VERSION
 };
-
