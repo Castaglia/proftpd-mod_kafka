@@ -62,6 +62,10 @@ if (scalar(@ARGV) > 0) {
   my $order = 0;
 
   my $FEATURE_TESTS = {
+    't/modules/mod_kafka/tls.t' => {
+      order => ++$order,
+      test_class => [qw(feat_openssl)],
+    }
   };
 
   my @feature_tests = testsuite_get_runnable_tests($FEATURE_TESTS);

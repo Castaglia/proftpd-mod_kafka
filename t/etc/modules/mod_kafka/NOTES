@@ -1,0 +1,6 @@
+
+See:
+  https://stackoverflow.com/questions/65870378/kafka-wont-start-with-pem-certificate
+
+openssl pkcs8 -in server-key.pem -topk8 -v1 PBE-SHA1-3DES -out server-key.pem.new
+
