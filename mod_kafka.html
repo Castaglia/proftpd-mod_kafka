@@ -206,7 +206,33 @@ This example shows the use of Kafka logging for <em>all</em> commands:
   &lt;IfModule mod_kafka.c&gt;
     KafkaEngine on
     KafkaLog /var/log/ftpd/kafka.log
-    KafkaBroker 127.0.0.1:9092
+    KafkaBroker kafka:9092
+
+    LogFormat kafka "%h %l %u %t \"%r\" %s %b"
+    KafkaLogOnEvent ALL kafka
+  &lt;/IfModule&gt;
+</pre>
+
+<p>
+For cases where you need to use TLS when talking to your Kafka brokers, you
+configure the necessary TLS files via the <code>KafkaProperty</code> directive:
+<pre>
+  &lt;IfModule mod_kafka.c&gt;
+    KafkaEngine on
+    KafkaLog /var/log/ftpd/kafka.log
+
+    KafkaProperty ssl.ca.location /usr/local/etc/kafka/ca.pem
+    KafkaProperty ssl.certificate.location /usr/local/etc/kafka/client.pem
+    KafkaProperty ssl.key.location /usr/local/etc/kafka/client.pem
+
+    # Set this to false if necessary
+    KafkaProperty enable.ssl.certificate.verification true
+
+    # Necessary for telling librdkafka to use TLS for the broker
+    KafkaProperty security.protocol ssl
+
+    # Kafka uses TLS on port 9093
+    KafkaBroker ssl://kafka:9093
 
     LogFormat kafka "%h %l %u %t \"%r\" %s %b"
     KafkaLogOnEvent ALL kafka
@@ -472,7 +498,7 @@ matters are the <code>LogFormat</code> variables which appear in the directive.
 <p>
 <hr>
 <font size=2><b><i>
-&copy; Copyright 2017-2020 TJ Saunders<br>
+&copy; Copyright 2017-2022 TJ Saunders<br>
  All Rights Reserved<br>
 </i></b></font>
 <hr>

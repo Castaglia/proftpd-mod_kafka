@@ -419,7 +419,7 @@ static void kafka_exit_ev(const void *event_data, void *user_data) {
 
 #if defined(PR_SHARED_MODULE)
 static void kafka_mod_unload_ev(const void *event_data, void *user_data) {
-  if (strncmp((const char *) event_data, "mod_kafka.c", 12) == 0) {
+  if (strcmp((const char *) event_data, "mod_kafka.c") == 0) {
     /* Unregister ourselves from all events. */
     pr_event_unregister(&kafka_module, NULL, NULL);
 
@@ -514,7 +514,7 @@ static int kafka_sess_init(void) {
 
     logname = c->argv[0];
 
-    if (strncasecmp(logname, "none", 5) != 0) {
+    if (strcasecmp(logname, "none") != 0) {
       pr_signals_block();
       PRIVS_ROOT
       res = pr_log_openfile(logname, &kafka_logfd, PR_LOG_SYSTEM_MODE);
@@ -592,7 +592,7 @@ static int kafka_sess_init(void) {
     const char *name, *value;
 
     name = "debug";
-    value = "broker,generic,msg,topic";
+    value = "broker,generic,msg,protocol,topic";
 
     memset(errstr, '\0', sizeof(errstr));
     conf_res = rd_kafka_conf_set(kafka_conf, name, value, errstr,
