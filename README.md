@@ -10,6 +10,8 @@ Status
 Synopsis
 --------
 
-The `mod_kafka` module for ProFTPD ...
+The `mod_kafka` module for ProFTPD allows for sending log messages, as JSON,
+to Kafka brokers using the [librdkafka](https://github.com/edenhill/librdkafka)
+client library.
 
 See the [mod_kafka.html](https://htmlpreview.github.io/?https://github.com/Castaglia/proftpd-mod_kafka/blob/master/mod_kafka.html) documentation for more details.
