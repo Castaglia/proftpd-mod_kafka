@@ -135,6 +135,7 @@ jobs:
             libfile-path-tiny-perl \
             libfile-spec-native-perl \
             libjson-perl \
+            libnet-inet6glue-perl \
             libnet-ssh2-perl \
             libnet-ssleay-perl \
             libnet-telnet-perl \
