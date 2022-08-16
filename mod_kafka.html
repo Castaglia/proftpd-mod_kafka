@@ -102,7 +102,7 @@ unless <code>AllowLogSymlinks</code> is explicitly set to <em>on</em>
 <p>
 <hr>
 <h3><a name="KafkaLogOnEvent">KafkaLogOnEvent</a></h3>
-<strong>Syntax:</strong> KafkaLogOnEvent <em>"none"|events format-name [topic ...]</em><br>
+<strong>Syntax:</strong> KafkaLogOnEvent <em>"none"|events format-name ["topic" topic-name ...]</em><br>
 <strong>Default:</strong> None<br>
 <strong>Context:</strong> server config, <code>&lt;VirtualHost&gt;</code>, <code>&lt;Global&gt;</code>, <code>&lt;Anonymous&gt;</code>, <code>&lt;Directory&gt;</code><br>
 <strong>Module:</strong> mod_kafka<br>
@@ -129,10 +129,14 @@ More on the use of Kafka logging, including a table showing how
 <a href="#Logging">here</a>.
 
 <p>
-Example:
+Examples:
 <pre>
   LogFormat sessions "%{iso8601} %a"
   KafkaLogOnEvent CONNECT,DISCONNECT sessions
+
+  # Publish these to a topic named "mytopic"
+  LogFormat kafka "%h %l %u %t %r %s %b"
+  KafkaLogOnEvent ALL kafka topic mytopic
 </pre>
 
 <p>
