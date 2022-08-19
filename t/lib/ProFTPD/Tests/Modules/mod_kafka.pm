@@ -36,6 +36,16 @@ my $TESTS = {
     test_class => [qw(forking)],
   },
 
+  kafka_log_on_event_retr => {
+    order => ++$order,
+    test_class => [qw(forking)],
+  },
+
+  kafka_log_on_event_stor => {
+    order => ++$order,
+    test_class => [qw(forking)],
+  },
+
 };
 
 sub new {
@@ -633,6 +643,321 @@ EOC
 
     my $nrecords = scalar(@$data);
     $self->assert($nrecords == 1, "Expected 1 record, got $nrecords");
+  };
+  if ($@) {
+    $ex = $@;
+  }
+
+  test_cleanup($setup->{log_file}, $ex);
+}
+
+sub kafka_log_on_event_retr {
+  my $self = shift;
+  my $tmpdir = $self->{tmpdir};
+  my $setup = test_setup($tmpdir, 'kafka');
+
+  my $fmt_name = 'mod_kafka';
+  my $topic = get_topic_name();
+
+  if ($ENV{TEST_VERBOSE}) {
+    print STDERR "# Using generated topic name: $topic\n";
+  }
+
+  kafka_topic_getall($topic);
+
+  my $kafka_host = get_kafka_host();
+
+  my $test_file = File::Spec->rel2abs("$tmpdir/test.txt");
+  if (open(my $fh, "> $test_file")) {
+    print $fh "Hello, Kafka!\n";
+
+    unless (close($fh)) {
+      die("Can't write $test_file: $!");
+    }
+
+    # Make sure that, if we're running as root, that the test file has
+    # permissions/privs set for the account we create
+    if ($< == 0) {
+      unless (chown($setup->{uid}, $setup->{gid}, $test_file)) {
+        die("Can't set owner of $test_file to $setup->{uid}/$setup->{gid}: $!");
+      }
+    }
+
+  } else {
+    die("Can't open $test_file: $!");
+  }
+
+  my $config = {
+    PidFile => $setup->{pid_file},
+    ScoreboardFile => $setup->{scoreboard_file},
+    SystemLog => $setup->{log_file},
+    TraceLog => $setup->{log_file},
+    Trace => 'jot:20 kafka:20',
+
+    AuthUserFile => $setup->{auth_user_file},
+    AuthGroupFile => $setup->{auth_group_file},
+    AuthOrder => 'mod_auth_file.c',
+
+    IfModules => {
+      'mod_delay.c' => {
+        DelayEngine => 'off',
+      },
+
+      # Note: we need to use arrays here, since order of directives matters.
+      'mod_kafka.c' => [
+        'KafkaEngine on',
+        "KafkaBroker $kafka_host",
+        "KafkaLog $setup->{log_file}",
+        "LogFormat $fmt_name \"%A %a %b %c %D %d %E %{epoch} %F %f %{gid} %g %H %h %I %{iso8601} %J %L %l %m %O %P %p %{protocol} %R %r %{remote-port} %S %s %T %t %U %u %{uid} %V %v %{version}\"",
+        "KafkaLogOnEvent RETR $fmt_name topic $topic",
+      ],
+    },
+  };
+
+  my ($port, $config_user, $config_group) = config_write($setup->{config_file},
+    $config);
+
+  # Open pipes, for use between the parent and child processes.  Specifically,
+  # the child will indicate when it's done with its test by writing a message
+  # to the parent.
+  my ($rfh, $wfh);
+  unless (pipe($rfh, $wfh)) {
+    die("Can't open pipe: $!");
+  }
+
+  my $ex;
+
+  # Fork child
+  $self->handle_sigchld();
+  defined(my $pid = fork()) or die("Can't fork: $!");
+  if ($pid) {
+    eval {
+      # Allow for server startup
+      sleep(1);
+
+      my $client = ProFTPD::TestSuite::FTP->new('127.0.0.1', $port);
+      $client->login($setup->{user}, $setup->{passwd});
+
+      my $conn = $client->retr_raw("test.txt");
+      unless ($conn) {
+        die("RETR test.txt failed: " . $client->response_code() . " " .
+          $client->response_msg());
+      }
+
+      my $buf;
+      while ($conn->read($buf, 25) > 0) {
+      }
+      eval { $conn->close(5) };
+      sleep(1);
+
+      my $resp_code = $client->response_code();
+      my $resp_msg = $client->response_msg();
+      $self->assert_transfer_ok($resp_code, $resp_msg);
+
+      $client->quit();
+    };
+    if ($@) {
+      $ex = $@;
+    }
+
+    $wfh->print("done\n");
+    $wfh->flush();
+
+  } else {
+    eval { server_wait($setup->{config_file}, $rfh) };
+    if ($@) {
+      warn($@);
+      exit 1;
+    }
+
+    exit 0;
+  }
+
+  # Stop server
+  server_stop($setup->{pid_file});
+  $self->assert_child_ok($pid);
+
+  eval {
+    # Allow for propagation time
+    sleep(2);
+
+    my $data = kafka_topic_getall($topic);
+
+    my $nrecords = scalar(@$data);
+    $self->assert($nrecords >= 1 || $nrecords <= 2,
+      "Expected at least 1-2 records, got $nrecords");
+
+    require JSON;
+    my $json = $data->[0]->{payload};
+
+    if ($ENV{TEST_VERBOSE}) {
+      print STDERR "# payload: '$json'\n";
+    }
+
+    my $record = decode_json($json);
+
+    my $expected = $setup->{user};
+    $self->assert($record->{user} eq $expected,
+      "Expected user '$expected', got '$record->{user}'");
+
+    $expected = '127.0.0.1';
+    $self->assert($record->{remote_ip} eq $expected,
+      "Expected remote IP '$expected', got '$record->{remote_ip}'");
+
+    $expected = 'RETR';
+    $self->assert($record->{command} eq $expected,
+      "Expected command '$expected', got '$record->{command}'");
+
+    $expected = 'test.txt';
+    $self->assert($record->{command_params} eq $expected,
+      "Expected command params '$expected', got '$record->{command_params}'");
+  };
+  if ($@) {
+    $ex = $@;
+  }
+
+  test_cleanup($setup->{log_file}, $ex);
+}
+
+sub kafka_log_on_event_stor {
+  my $self = shift;
+  my $tmpdir = $self->{tmpdir};
+  my $setup = test_setup($tmpdir, 'kafka');
+
+  my $fmt_name = 'mod_kafka';
+  my $topic = get_topic_name();
+
+  if ($ENV{TEST_VERBOSE}) {
+    print STDERR "# Using generated topic name: $topic\n";
+  }
+
+  kafka_topic_getall($topic);
+
+  my $kafka_host = get_kafka_host();
+
+  my $config = {
+    PidFile => $setup->{pid_file},
+    ScoreboardFile => $setup->{scoreboard_file},
+    SystemLog => $setup->{log_file},
+    TraceLog => $setup->{log_file},
+    Trace => 'jot:20 kafka:20',
+
+    AuthUserFile => $setup->{auth_user_file},
+    AuthGroupFile => $setup->{auth_group_file},
+    AuthOrder => 'mod_auth_file.c',
+
+    IfModules => {
+      'mod_delay.c' => {
+        DelayEngine => 'off',
+      },
+
+      # Note: we need to use arrays here, since order of directives matters.
+      'mod_kafka.c' => [
+        'KafkaEngine on',
+        "KafkaBroker $kafka_host",
+        "KafkaLog $setup->{log_file}",
+        "LogFormat $fmt_name \"%A %a %b %c %D %d %E %{epoch} %F %f %{gid} %g %H %h %I %{iso8601} %J %L %l %m %O %P %p %{protocol} %R %r %{remote-port} %S %s %T %t %U %u %{uid} %V %v %{version}\"",
+        "KafkaLogOnEvent STOR $fmt_name topic $topic",
+      ],
+    },
+  };
+
+  my ($port, $config_user, $config_group) = config_write($setup->{config_file},
+    $config);
+
+  # Open pipes, for use between the parent and child processes.  Specifically,
+  # the child will indicate when it's done with its test by writing a message
+  # to the parent.
+  my ($rfh, $wfh);
+  unless (pipe($rfh, $wfh)) {
+    die("Can't open pipe: $!");
+  }
+
+  my $ex;
+
+  # Fork child
+  $self->handle_sigchld();
+  defined(my $pid = fork()) or die("Can't fork: $!");
+  if ($pid) {
+    eval {
+      # Allow for server startup
+      sleep(1);
+
+      my $client = ProFTPD::TestSuite::FTP->new('127.0.0.1', $port);
+      $client->login($setup->{user}, $setup->{passwd});
+
+      my $conn = $client->stor_raw("test.txt");
+      unless ($conn) {
+        die("STOR test.txt failed: " . $client->response_code() . " " .
+          $client->response_msg());
+      }
+
+      my $buf = "Hello, Kafka!\n";
+      $conn->write($buf, length($buf), 25);
+      eval { $conn->close(5) };
+      sleep(1);
+
+      my $resp_code = $client->response_code();
+      my $resp_msg = $client->response_msg();
+      $self->assert_transfer_ok($resp_code, $resp_msg);
+
+      $client->quit();
+    };
+    if ($@) {
+      $ex = $@;
+    }
+
+    $wfh->print("done\n");
+    $wfh->flush();
+
+  } else {
+    eval { server_wait($setup->{config_file}, $rfh) };
+    if ($@) {
+      warn($@);
+      exit 1;
+    }
+
+    exit 0;
+  }
+
+  # Stop server
+  server_stop($setup->{pid_file});
+  $self->assert_child_ok($pid);
+
+  eval {
+    # Allow for propagation time
+    sleep(2);
+
+    my $data = kafka_topic_getall($topic);
+
+    my $nrecords = scalar(@$data);
+    $self->assert($nrecords >= 1 || $nrecords <= 2,
+      "Expected at least 1-2 records, got $nrecords");
+
+    require JSON;
+    my $json = $data->[0]->{payload};
+
+    if ($ENV{TEST_VERBOSE}) {
+      print STDERR "# payload: '$json'\n";
+    }
+
+    my $record = decode_json($json);
+
+    my $expected = $setup->{user};
+    $self->assert($record->{user} eq $expected,
+      "Expected user '$expected', got '$record->{user}'");
+
+    $expected = '127.0.0.1';
+    $self->assert($record->{remote_ip} eq $expected,
+      "Expected remote IP '$expected', got '$record->{remote_ip}'");
+
+    $expected = 'STOR';
+    $self->assert($record->{command} eq $expected,
+      "Expected command '$expected', got '$record->{command}'");
+
+    $expected = 'test.txt';
+    $self->assert($record->{command_params} eq $expected,
+      "Expected command params '$expected', got '$record->{command_params}'");
   };
   if ($@) {
     $ex = $@;
