@@ -528,7 +528,7 @@ static int kafka_sess_init(void) {
   char *brokers, errstr[KAFKA_ERRSTR_SIZE];
 #if defined(HAVE_RD_KAFKA_CONF_GET)
   size_t builtin_len = 0;
-#endif
+#endif /* HAVE_RD_KAFKA_CONF_GET */
   rd_kafka_conf_t *kafka_conf;
   rd_kafka_conf_res_t conf_res;
 
@@ -731,6 +731,7 @@ static int kafka_sess_init(void) {
 #if defined(HAVE_RD_KAFKA_CONF_GET)
   /* Query the builtin features; we reuse the error string buffer for this. */
   memset(errstr, '\0', sizeof(errstr));
+  builtin_len = sizeof(errstr)-1;
   conf_res = rd_kafka_conf_get(kafka_conf, "builtin.features", errstr,
     &builtin_len);
   if (conf_res == RD_KAFKA_CONF_OK &&
@@ -738,7 +739,7 @@ static int kafka_sess_init(void) {
     pr_trace_msg(trace_channel, 12, "builtin features: %.*s (%lu)",
       (int) builtin_len, errstr, (unsigned long) builtin_len);
   }
-#endif
+#endif /* HAVE_RD_KAFKA_CONF_GET */
 
   return 0;
 }
