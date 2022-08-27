@@ -3790,6 +3790,41 @@ fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for librdkafka rd_kafka_conf_set_error_cb" >&5
+$as_echo_n "checking for librdkafka rd_kafka_conf_set_error_cb... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+    #include <librdkafka/rdkafka.h>
+
+int
+main ()
+{
+
+    rd_kafka_conf_set_error_cb(NULL, NULL);
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_RD_KAFKA_CONF_SET_ERROR_CB 1" >>confdefs.h
+
+
+else
+
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for librdkafka rd_kafka_conf_set_log_cb" >&5
 $as_echo_n "checking for librdkafka rd_kafka_conf_set_log_cb... " >&6; }
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -3813,6 +3848,41 @@ if ac_fn_c_try_link "$LINENO"; then :
 $as_echo "yes" >&6; }
 
 $as_echo "#define HAVE_RD_KAFKA_CONF_SET_LOG_CB 1" >>confdefs.h
+
+
+else
+
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for librdkafka rd_kafka_fatal_error" >&5
+$as_echo_n "checking for librdkafka rd_kafka_fatal_error... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+    #include <librdkafka/rdkafka.h>
+
+int
+main ()
+{
+
+    (void) rd_kafka_fatal_error(NULL, NULL, 0);
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_RD_KAFKA_FATAL_ERROR 1" >>confdefs.h
 
 
 else

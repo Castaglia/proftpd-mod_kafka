@@ -1,6 +1,6 @@
 /*
  * ProFTPD - mod_kafka
- * Copyright (c) 2017-2020 TJ Saunders
+ * Copyright (c) 2017-2022 TJ Saunders
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -63,7 +63,7 @@ static void kafka_log_cb(const rd_kafka_t *rk, int level, const char *facility,
   pr_trace_msg(trace_channel, 1, "(rdkafka): [%s:%d] %s", facility, level,
     text);
 }
-#endif
+#endif /* HAVE_RD_KAFKA_CONF_SET_LOG_CB */
 
 #if defined(HAVE_RD_KAFKA_CONF_SET_DR_CB) && \
    !defined(HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB)
@@ -93,7 +93,35 @@ static void kafka_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *msg,
       msg->partition);
   }
 }
-#endif
+#endif /* HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB */
+
+#if defined(HAVE_RD_KAFKA_CONF_SET_ERROR_CB)
+static void kafka_error_cb(rd_kafka_t *rk, int err, const char *reason,
+    void *event_data) {
+
+  /* The `RD_KAFKA_RESP_ERR__FATAL` enum value, and `rd_kafka_fatal_error()`
+   * function, appeared in librdkafka-1.0.  So we need to handle older
+   * versions of the library as well.
+   */
+# if defined(HAVE_RD_KAFKA_FATAL_ERROR)
+  if (err == RD_KAFKA_RESP_ERR__FATAL) {
+    char errstr[KAFKA_ERRSTR_SIZE];
+
+    memset(errstr, '\0', sizeof(errstr));
+    rd_kafka_fatal_error(rk, errstr, sizeof(errstr)-1);
+    (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION, "FATAL: %s: %s",
+      reason, errstr);
+
+    /* TODO: Shutdown?? */
+    return;
+  }
+# endif /* HAVE_RD_KAFKA_FATAL_ERROR */
+
+  /* Non-fatal error; just log it. */
+  (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION, "warning: %s",
+    reason);
+}
+#endif /* HAVE_RD_KAFKA_CONF_SET_ERROR_CB */
 
 static int kafka_send_msg(pool *p, rd_kafka_topic_t *topic, char *payload,
     size_t payload_len) {
@@ -118,7 +146,7 @@ static int kafka_send_msg(pool *p, rd_kafka_topic_t *topic, char *payload,
     xerrstr = rd_kafka_err2str(rd_kafka_last_error());
 #else
     xerrstr = rd_kafka_err2str(rd_kafka_errno2err(xerrno));
-#endif
+#endif /* HAVE_RD_KAFKA_LAST_ERROR */
 
     (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
       "error producing message to topic '%s': %s (%s)",
@@ -239,8 +267,22 @@ MODRET set_kafkabroker(cmd_rec *cmd) {
   c = add_config_param(cmd->argv[0], 1, NULL);
 
   brokers = pstrdup(c->pool, cmd->argv[1]);
+
+  if (strchr(brokers, ',') != NULL) {
+    CONF_ERROR(cmd, pstrcat(cmd->tmp_pool,
+      "illegal ',' character detected in broker '", brokers, "'", NULL));
+  }
+
   for (i = 2; i < cmd->argc-1; i++) {
-    brokers = pstrcat(c->pool, brokers, ",", cmd->argv[i], NULL);
+    char *broker;
+
+    broker = cmd->argv[i];
+    if (strchr(broker, ',') != NULL) {
+      CONF_ERROR(cmd, pstrcat(cmd->tmp_pool,
+        "illegal ',' character detected in broker '", broker, "'", NULL));
+    }
+
+    brokers = pstrcat(c->pool, brokers, ",", broker, NULL);
   }
 
   c->argv[0] = brokers;
@@ -565,6 +607,8 @@ static int kafka_sess_init(void) {
   conf_res = rd_kafka_conf_set(kafka_conf, "bootstrap.servers", brokers, errstr,
     sizeof(errstr)-1);
   if (conf_res != RD_KAFKA_CONF_OK) {
+    (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
+      "error setting property 'bootstrap.servers=%s': %s", brokers, errstr);
     memset(errstr, '\0', sizeof(errstr));
   }
 
@@ -603,15 +647,21 @@ static int kafka_sess_init(void) {
     }
   }
 
+#if defined(HAVE_RD_KAFKA_CONF_SET_ERROR_CB)
+  rd_kafka_conf_set_error_cb(kafka_conf, kafka_error_cb);
+#endif /* HAVE_RD_KAFKA_CONF_SET_ERROR_CB */
+
 #if defined(HAVE_RD_KAFKA_CONF_SET_LOG_CB)
   rd_kafka_conf_set_log_cb(kafka_conf, kafka_log_cb);
-#endif
+#endif /* HAVE_RD_KAFKA_CONF_SET_LOG_CB */
+
 #if defined(HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB)
   rd_kafka_conf_set_dr_msg_cb(kafka_conf, kafka_msg_cb);
 #elif defined(HAVE_RD_KAFKA_CONF_SET_DR_CB)
   rd_kafka_conf_set_dr_cb(kafka_conf, kafka_dr_cb);
 #endif
 
+  memset(errstr, '\0', sizeof(errstr));
   kafka = rd_kafka_new(RD_KAFKA_PRODUCER, kafka_conf, errstr, sizeof(errstr)-1);
   if (kafka == NULL) {
     (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,

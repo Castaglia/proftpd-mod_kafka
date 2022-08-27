@@ -1,5 +1,5 @@
 dnl ProFTPD - mod_kafka
-dnl Copyright (c) 2017 TJ Saunders <tj@castaglia.org>
+dnl Copyright (c) 2017-2022 TJ Saunders <tj@castaglia.org>
 dnl
 dnl This program is free software; you can redistribute it and/or modify
 dnl it under the terms of the GNU General Public License as published by
@@ -122,6 +122,23 @@ AC_TRY_LINK(
   ]
 )
 
+AC_MSG_CHECKING([for librdkafka rd_kafka_conf_set_error_cb])
+AC_TRY_LINK(
+  [
+    #include <librdkafka/rdkafka.h>
+  ],
+  [
+    rd_kafka_conf_set_error_cb(NULL, NULL);
+  ],
+  [
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(HAVE_RD_KAFKA_CONF_SET_ERROR_CB, 1, [Define if you have librdkafka rd_kafka_conf_set_error_cb])
+  ],
+  [
+    AC_MSG_RESULT(no)
+  ]
+)
+
 AC_MSG_CHECKING([for librdkafka rd_kafka_conf_set_log_cb])
 AC_TRY_LINK(
   [
@@ -133,6 +150,23 @@ AC_TRY_LINK(
   [
     AC_MSG_RESULT(yes)
     AC_DEFINE(HAVE_RD_KAFKA_CONF_SET_LOG_CB, 1, [Define if you have librdkafka rd_kafka_conf_set_log_cb])
+  ],
+  [
+    AC_MSG_RESULT(no)
+  ]
+)
+
+AC_MSG_CHECKING([for librdkafka rd_kafka_fatal_error])
+AC_TRY_LINK(
+  [
+    #include <librdkafka/rdkafka.h>
+  ],
+  [
+    (void) rd_kafka_fatal_error(NULL, NULL, 0);
+  ],
+  [
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(HAVE_RD_KAFKA_FATAL_ERROR, 1, [Define if you have librdkafka rd_kafka_fatal_error])
   ],
   [
     AC_MSG_RESULT(no)

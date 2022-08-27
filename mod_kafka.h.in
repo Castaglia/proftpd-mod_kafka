@@ -1,6 +1,6 @@
 /*
  * ProFTPD - mod_kafka
- * Copyright (c) 2017-2020 TJ Saunders
+ * Copyright (c) 2017-2022 TJ Saunders
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,8 +50,14 @@
 /* Define if you have the rd_kafka_conf_set_dr_msg_cb function.  */
 #undef HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB
 
+/* Define if you have the rd_kafka_conf_set_error_cb function.  */
+#undef HAVE_RD_KAFKA_CONF_SET_ERROR_CB
+
 /* Define if you have the rd_kafka_conf_set_log_cb function.  */
 #undef HAVE_RD_KAFKA_CONF_SET_LOG_CB
+
+/* Define if you have the rd_kafka_fatal_error function.  */
+#undef HAVE_RD_KAFKA_FATAL_ERROR
 
 /* Define if you have the rd_kafka_flush function.  */
 #undef HAVE_RD_KAFKA_FLUSH
