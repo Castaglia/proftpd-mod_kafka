@@ -48,7 +48,7 @@ static rd_kafka_topic_t *kafka_topic = NULL;
 
 #define KAFKA_FLUSH_TIMEOUT_MS		5000
 #define KAFKA_POLL_TIMEOUT_MS		500
-#define KAFKA_ERRSTR_SIZE		256
+#define KAFKA_ERRSTR_SIZE		512
 
 static const char *trace_channel = "kafka";
 
@@ -439,7 +439,7 @@ static void kafka_exit_ev(const void *event_data, void *user_data) {
 #else
   /* Always poll afterward, to see if our queue can be flushed. */
   rd_kafka_poll(kafka, KAFKA_POLL_TIMEOUT_MS);
-#endif
+#endif /* HAVE_RD_KAFKA_FLUSH */
 
   pr_table_do(kafka_topics, kafka_topic_destroy_cb, NULL, PR_TABLE_DO_FL_ALL);
   pr_table_empty(kafka_topics);
@@ -461,18 +461,20 @@ static void kafka_exit_ev(const void *event_data, void *user_data) {
 
 #if defined(PR_SHARED_MODULE)
 static void kafka_mod_unload_ev(const void *event_data, void *user_data) {
-  if (strcmp((const char *) event_data, "mod_kafka.c") == 0) {
-    /* Unregister ourselves from all events. */
-    pr_event_unregister(&kafka_module, NULL, NULL);
-
-    destroy_pool(kafka_pool);
-    kafka_pool = NULL;
-
-    (void) close(kafka_logfd);
-    kafka_logfd = -1;
+  if (strcmp((const char *) event_data, "mod_kafka.c") != 0) {
+    return;
   }
+
+  /* Unregister ourselves from all events. */
+  pr_event_unregister(&kafka_module, NULL, NULL);
+
+  destroy_pool(kafka_pool);
+  kafka_pool = NULL;
+
+  (void) close(kafka_logfd);
+  kafka_logfd = -1;
 }
-#endif
+#endif /* PR_SHARED_MODULE */
 
 static void kafka_sess_reinit_ev(const void *event_data, void *user_data) {
   int res;
@@ -504,7 +506,7 @@ static int kafka_init(void) {
 #if defined(PR_SHARED_MODULE)
   pr_event_register(&kafka_module, "core.module-unload", kafka_mod_unload_ev,
     NULL);
-#endif
+#endif /* PR_SHARED_MODULE */
 
   if (rd_kafka_version() != RD_KAFKA_VERSION) {
     pr_log_pri(PR_LOG_NOTICE, MOD_KAFKA_VERSION
@@ -701,7 +703,7 @@ static int kafka_sess_init(void) {
         xerrstr = rd_kafka_err2str(rd_kafka_last_error());
 #else
         xerrstr = rd_kafka_err2str(rd_kafka_errno2err(xerrno));
-#endif
+#endif /* HAVE_RD_KAFKA_LAST_ERROR */
 
         (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
           "error allocating Kafka topic handle for topic '%s': %s", topic_name,
