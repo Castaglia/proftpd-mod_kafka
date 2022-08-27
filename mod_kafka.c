@@ -83,7 +83,7 @@ static void kafka_dr_cb(rd_kafka_t *rk, void *msg, size_t msg_len,
 #if defined(HAVE_RD_KAFKA_CONF_SET_DR_MSG_CB)
 static void kafka_msg_cb(rd_kafka_t *rk, const rd_kafka_message_t *msg,
     void *event_data) {
-  if (msg->err > 0) {
+  if (msg->err != 0) {
     (void) pr_log_writefile(kafka_logfd, MOD_KAFKA_VERSION,
       "error delivering message: %s", rd_kafka_err2str(msg->err));
 
