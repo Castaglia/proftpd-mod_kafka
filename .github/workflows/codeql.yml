@@ -1,0 +1,76 @@
+name: CodeQL
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '**/*.md'
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - '**/*.md'
+  schedule:
+    - cron: "33 10 * * 5"
+
+jobs:
+  analyze:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: true
+      matrix:
+        language:
+          - cpp
+
+    steps:
+      - name: Checkout ProFTPD
+        uses: actions/checkout@v3
+        with:
+          repository: proftpd/proftpd
+
+      - name: Checkout mod_kafka
+        uses: actions/checkout@v3
+        with:
+          path: contrib/mod_kafka
+
+      - name: Install Packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librdkafka-dev zlib1g-dev
+
+      - name: Configure
+        run: |
+          ./configure --with-modules=mod_kafka
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: ${{ matrix.language }}
+          config-file: contrib/mod_kafka/.codeql.yml
+          queries: +security-and-quality
+          source-root: contrib/mod_kafka
+
+      - name: Build
+        run: |
+          make
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          category: "/language:${{ matrix.language }}"
+          checkout_path: contrib/mod_kafka
+          output: sarif-results
+          upload: false
+
+      - name: Upload CodeQL SARIF
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          checkout_path: contrib/mod_kafka
+          sarif_file: "sarif-results/${{ matrix.language }}.sarif"
