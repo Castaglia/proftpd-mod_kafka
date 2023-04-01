@@ -141,7 +141,7 @@ static int kafka_send_msg(pool *p, rd_kafka_topic_t *topic, char *payload,
 
   if (res < 0) {
     const char *xerrstr;
- 
+
 #if defined(HAVE_RD_KAFKA_LAST_ERROR)
     xerrstr = rd_kafka_err2str(rd_kafka_last_error());
 #else
