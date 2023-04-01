@@ -50,7 +50,7 @@ static void tear_down(void) {
     p = permanent_pool = NULL;
     session.c = NULL;
     session.notes = NULL;
-  } 
+  }
 }
 
 Suite *tests_get_kafka_suite(void) {
