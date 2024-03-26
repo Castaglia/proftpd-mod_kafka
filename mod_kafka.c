@@ -1,6 +1,6 @@
 /*
  * ProFTPD - mod_kafka
- * Copyright (c) 2017-2022 TJ Saunders
+ * Copyright (c) 2017-2024 TJ Saunders
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -381,6 +381,32 @@ MODRET set_kafkalogonevent(cmd_rec *cmd) {
 
     logfmt_config = find_config_next(logfmt_config, logfmt_config->next,
       CONF_PARAM, "LogFormat", FALSE);
+  }
+
+  if (log_fmt == NULL) {
+    config_rec *ci;
+
+    /* Not found yet?  Search in the as-yet-unmerged <Global> sections. */
+
+    for (ci = (config_rec *) cmd->server->conf->xas_list; ci; ci = ci->next) {
+      if (ci->config_type != CONF_GLOBAL ||
+          strcmp(ci->name, "<Global>") != 0) {
+        continue;
+      }
+
+      logfmt_config = find_config(ci->subset, CONF_PARAM, "LogFormat", FALSE);
+      while (logfmt_config != NULL) {
+        pr_signals_handle();
+
+        if (strcmp(fmt_name, logfmt_config->argv[0]) == 0) {
+          log_fmt = logfmt_config->argv[1];
+          break;
+        }
+
+        logfmt_config = find_config_next(logfmt_config, logfmt_config->next,
+          CONF_PARAM, "LogFormat", FALSE);
+      }
+    }
   }
 
   if (log_fmt == NULL) {
