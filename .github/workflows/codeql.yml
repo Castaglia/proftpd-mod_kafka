@@ -50,7 +50,7 @@ jobs:
           ./configure --with-modules=mod_kafka
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           config-file: contrib/mod_kafka/.codeql.yml
@@ -62,7 +62,7 @@ jobs:
           make
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
           checkout_path: contrib/mod_kafka
@@ -70,7 +70,7 @@ jobs:
           upload: false
 
       - name: Upload CodeQL SARIF
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           checkout_path: contrib/mod_kafka
           sarif_file: "sarif-results/${{ matrix.language }}.sarif"
