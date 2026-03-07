@@ -17,7 +17,7 @@ jobs:
     services:
       kafka:
         # Docker Hub image
-        image: bitnami/kafka
+        image: bitnamilegacy/kafka:3.0
         env:
           ALLOW_PLAINTEXT_LISTENER: 'yes'
           KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: 'true'
@@ -30,7 +30,7 @@ jobs:
           --health-retries 5
 
       zookeeper:
-        image: bitnami/zookeeper
+        image: bitnamilegacy/zookeeper:3.8
         env:
           ALLOW_ANONYMOUS_LOGIN: 'yes'
         # Set health checks to wait until Zookeeper has started
