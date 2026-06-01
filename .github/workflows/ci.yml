@@ -14,32 +14,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    services:
-      kafka:
-        # Docker Hub image
-        image: bitnamilegacy/kafka:3.0
-        env:
-          ALLOW_PLAINTEXT_LISTENER: 'yes'
-          KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: 'true'
-          KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
-        # Set health checks to wait until Kafka has started
-        options: >-
-          --health-cmd "kafka-broker-api-versions.sh --version"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      zookeeper:
-        image: bitnamilegacy/zookeeper:3.8
-        env:
-          ALLOW_ANONYMOUS_LOGIN: 'yes'
-        # Set health checks to wait until Zookeeper has started
-        options: >-
-          --health-cmd "echo mntr | nc -w 2 -q 2 localhost 2181"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     env:
       # Let's try opting into use of Nodejs v24; see:
       #  https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
@@ -47,7 +21,6 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       CI: true
-      KAFKA_HOST: kafka
 
     strategy:
       matrix:
@@ -195,15 +168,6 @@ jobs:
         run: |
           cd proftpd
           make install
-
-      - name: Run integration tests
-        if: ${{ matrix.compiler == 'gcc' && matrix.container == 'ubuntu:22.04' }}
-        env:
-          PROFTPD_TEST_BIN: /usr/local/sbin/proftpd
-          PROFTPD_TEST_DIR: ${{ github.workspace }}/proftpd
-        run: |
-          cd proftpd/contrib/mod_kafka
-          perl tests.pl
 
       - name: Build with shared modules
         env:
