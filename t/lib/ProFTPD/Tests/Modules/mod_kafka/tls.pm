@@ -108,8 +108,8 @@ sub kafka_tls_log_on_event {
 
   my $kafka_host = get_kafka_host();
 
-  my $client_cert = File::Spec->rel2abs("$ENV{PROFTPD_TEST_DIR}/tests/t/etc/modules/mod_tls/client-cert.pem");
-  my $ca_cert = File::Spec->rel2abs("$ENV{PROFTPD_TEST_DIR}/tests/t/etc/modules/mod_tls/ca-cert.pem");
+  my $client_cert = File::Spec->rel2abs("$ENV{PROFTPD_TEST_DIR}/t/etc/modules/mod_tls/client-cert.pem");
+  my $ca_cert = File::Spec->rel2abs("$ENV{PROFTPD_TEST_DIR}/t/etc/modules/mod_tls/ca-cert.pem");
 
   my $config = {
     PidFile => $setup->{pid_file},
